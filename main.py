@@ -1,8 +1,12 @@
 from bs4 import BeautifulSoup as BS
 import requests
+from multiprocessing import Pool
 
 def get_html(url):
-    response = requests.get(url)
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36'}
+    response = requests.get(url, headers=headers)
+    # print(response.status_code)
     if response.status_code == 200:
         return response.text
     return None
@@ -44,57 +48,88 @@ def get_glide_link(html):
 def get_data(html):
     soup = BS(html, 'html.parser')
     content = soup.find('div', class_='content-wrapper')
-    # phone_block = content.find('div', class_='phone-fixable-block')
-    # user = phone_block.find('a', class_='name').text.strip()
-    # phone = phone_block.find('div', class_='number').text.strip()
-    # print(user,phone)
-    # details = content.find('div', class_='details-main')
-    # left = details.find('div', class_='left')
-    # label = left.find_all('div', class_='label')
-    # info = left.find_all('div', class_='info')
-    # for i,l in zip(label, info):
-    #     print(l.text.strip(), ':', i.text.strip())
-    detials = content.find('div', class_='details-header')
-    left = detials.find('div', class_='left')
-    left1 = left.find('h1')
-    print(left1.text.strip())
-    c_name = left.find('div', class_='c-name')
-    if c_name:
-        print(c_name.find('a').text.strip())
-    else:
-        print('Нет ЖК')
+    phone_block = content.find('div', class_='phone-fixable-block')
+    user = phone_block.find('a', class_='name').text.strip()
+    phone = phone_block.find('div', class_='number').text.strip()
+    
+    details = content.find('div', class_='details-main')
+    left = details.find('div', {'class':'left'})
+    label = left.find_all('div', class_='label')
+    info = left.find_all('div', class_='info')
+    
+    for l, i in zip(label, info):
+        # print(l.text.strip()+':'+ i.text.strip())
+        pass
+
+    details_header = content.find('div', class_='details-header') 
+    left = details_header.find('div', class_='left') 
+    right_prices_block = details_header.find('div', class_='right prices-block') 
+    right = details.find('div', class_='right') 
+    sep_main = right_prices_block.find('div', class_='sep main') 
+    sep_addit = right_prices_block.find('div', class_='sep addit') 
+    name = left.find('h1').text.strip()
+    print(name) 
+    c_name = left.find('div', class_='c-name') 
+    c_name = c_name.text.strip() if c_name else 'Net ZHK'
     address = left.find('div', class_='address').text.strip()
-    print(address)
-    prices_block = detials.find('div',class_='right prices-block')
-    price = prices_block.find_all('div', class_='price-dollar')
-    price_m = prices_block.find_all('div', class_='price-som')
-    for i,l in zip(price, price_m):
-        print(i.text.strip(), ':', l.text.strip())
-    det_m =content.find('div', class_='details-main')
-    right = det_m.find('div', class_='right')
-    desc = right.find('div', class_='description')
-    if desc:
-        print(desc.text.strip())
-    else:
-        print('Нет описания')
-
+    # print(address) 
+    price_dollar = sep_main.find('div', class_='price-dollar').text.strip()
     
+    price_som = sep_main.find('div', class_='price-som').text.strip()
+    price_dollar2 = sep_addit.find('div', class_='price-dollar').text.strip()
     
+    price_som2 = sep_addit.find('div', class_='price-som').text.strip()
+    description = right.find('div', class_='description') 
+    description = description.text.strip() if description else 'Net Opisania'
 
+
+    data = {
+        'title': name,
+        'price': price_som,
+        'price_dollar': price_dollar,
+        'price_m2': price_som2,
+        'price_dollar_m2': price_dollar2,
+        'address': address,
+        'zhk': c_name,
+        'user': user,
+        'phone': phone,
+        'description': description,
+        'INFO' : {l,i}
+        
+    }
+    
+    return data
+
+
+
+
+def last_page(html):
+    soup = BS(html, 'html.parser')
+    page = soup.find('ul', class_='pagination')
+    pages = page.find_all('a', class_='page-link')
+    last_page = pages[-1].get('data-page')
+    return int(last_page)
+
+def parsing(page_num):
+    URL = 'https://www.house.kg/kupit-kvartiru?'
+    page_url = URL + f'page={page_num}'
+    page_html = get_html(page_url)
+    links = get_glide_link(page_html)
+    for link in links:
+        post_links = get_html(url=link)
+        get_data(html=post_links)
 
 
 def main():
     URL = 'https://www.house.kg/kupit-kvartiru?'
     html = get_html(url=URL)
-    links = get_glide_link(html=html)
+    pages = last_page(html)
+    with Pool(50) as p:
+        p.map(parsing, range(1, pages+1))
 
-    for link in links:
-        html2 = get_html(url=link)
-        get_data(html=html2)
-    
- 
 if __name__ == '__main__':
     main()
+
 
 
 
